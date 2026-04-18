@@ -53,6 +53,20 @@ ssize_t marshal_request(const rpc_request_t *req, uint8_t *buffer, size_t buffer
             break;
         }
 
+        case RPC_READ: {
+            // Deskryptor fd (32-bity)
+            uint32_t net_fd = htobe32((uint32_t)req->args.w_args.fd);
+            memcpy(ptr, &net_fd, sizeof(uint32_t));
+            ptr += sizeof(uint32_t);
+
+            // Zmienna count (32-bity)
+            uint32_t net_count = htobe32(req->args.w_args.count);
+            memcpy(ptr, &net_count, sizeof(uint32_t));
+            ptr += sizeof(uint32_t);
+
+            break;
+        }
+
         // TUTAJ dodaj analogiczne bloki (case) dla RPC_READ, RPC_LSEEK, itd.
         // Zawsze pamiętaj o htobe32 dla intów i htobe64 dla long/off_t.
 
@@ -123,6 +137,22 @@ int unmarshal_request(const uint8_t *buffer, size_t buffer_len, rpc_request_t *r
 
             memcpy(req->args.w_args.buf, ptr, req->args.w_args.count);
             ptr += req->args.w_args.count;
+            break;
+        }
+
+        case RPC_READ: {
+            if (buffer_len - (ptr - buffer) < (sizeof(uint32_t) * 2)) return -1;
+
+            uint32_t net_fd, net_count;
+            
+            memcpy(&net_fd, ptr, sizeof(uint32_t));
+            req->args.w_args.fd = (int)be32toh(net_fd);
+            ptr += sizeof(uint32_t);
+
+            memcpy(&net_count, ptr, sizeof(uint32_t));
+            req->args.w_args.count = be32toh(net_count);
+            ptr += sizeof(uint32_t);
+            
             break;
         }
 

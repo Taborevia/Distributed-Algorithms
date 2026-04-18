@@ -111,7 +111,9 @@ int main() {
                     resp.return_value = read_bytes;
                     // resp.data = req.args.rw_args.buf;
                     printf("[SERWER] Odczytano %ld bajtów z fd=%d\n", read_bytes, req.args.r_args.fd);
+                    printf(strlen(resp.data));
                 }
+                break;
             }
             default:
                 resp.status = -ENOSYS; // Niezaimplementowane

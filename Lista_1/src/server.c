@@ -101,9 +101,23 @@ int main() {
                 }
                 break;
             }
+            case RPC_LSEEK: {
+                off_t new_offset = lseek(req.args.lseek_args.fd, 
+                                         req.args.lseek_args.offset, 
+                                         req.args.lseek_args.whence);
+                if (new_offset == (off_t)-1) {
+                    resp.status = -errno;
+                } else {
+                    resp.return_value = new_offset;
+                    printf("[SERWER] Wykonano lseek na fd=%d, nowy offset=%ld\n", 
+                           req.args.lseek_args.fd, new_offset);
+                }
+                break;
+            }
             case RPC_READ: {
                 printf("[SERWER] Próba odczytu %u bajtów z fd=%d\n", req.args.r_args.count, req.args.r_args.fd);
                 ssize_t read_bytes = read(req.args.r_args.fd, resp.data, req.args.r_args.count);
+                printf("hello there");
                 if (read_bytes < 0) {
                     printf("ERROR\n");
                     resp.status = -errno;
@@ -111,7 +125,8 @@ int main() {
                     resp.return_value = read_bytes;
                     // resp.data = req.args.rw_args.buf;
                     printf("[SERWER] Odczytano %ld bajtów z fd=%d\n", read_bytes, req.args.r_args.fd);
-                    printf(strlen(resp.data));
+                    printf("tutaj");
+                    fwrite(resp.data, 1, read_bytes, stdout);
                 }
                 break;
             }

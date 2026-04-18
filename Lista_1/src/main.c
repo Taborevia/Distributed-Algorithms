@@ -29,12 +29,15 @@ int main() {
         printf("Błąd zapisu.\n");
     }
 
-    const char *read_bytes;
+    printf("Cofam wskaźnik pliku na początek (lseek)...\n");
+    rpc_lseek(plik, 0, SEEK_SET);
+
+    char read_bytes[MAX_CHUNK_SIZE];
     printf("Odczytywanie danych...\n");
 
-    ssize_t odczytano = rpc_read((void*)read_bytes, strlen(wiadomosc), plik);
+    ssize_t odczytano = rpc_read(read_bytes, strlen(wiadomosc), plik);
     if (odczytano > 0) {
-        printf("Sukces! Odczytano %ld bajtów: %s\n", odczytano, read_bytes);
+        printf("Sukces! Odczytano %ld bajtów: %.*s\n", (int)odczytano, read_bytes);
     } else {
         printf("Błąd odczytu.\n");
     }

@@ -53,14 +53,32 @@ ssize_t marshal_request(const rpc_request_t *req, uint8_t *buffer, size_t buffer
             break;
         }
 
+        case RPC_LSEEK: {
+            // Deskryptor fd (32-bity)
+            uint32_t net_fd = htobe32((uint32_t)req->args.lseek_args.fd);
+            memcpy(ptr, &net_fd, sizeof(uint32_t));
+            ptr += sizeof(uint32_t);
+
+            // Offset (64-bity)
+            uint64_t net_offset = htobe64((uint64_t)req->args.lseek_args.offset);
+            memcpy(ptr, &net_offset, sizeof(uint64_t));
+            ptr += sizeof(uint64_t);
+
+            // Whence (32-bity)
+            uint32_t net_whence = htobe32((uint32_t)req->args.lseek_args.whence);
+            memcpy(ptr, &net_whence, sizeof(uint32_t));
+            ptr += sizeof(uint32_t);
+            break;
+        }
+
         case RPC_READ: {
             // Deskryptor fd (32-bity)
-            uint32_t net_fd = htobe32((uint32_t)req->args.w_args.fd);
+            uint32_t net_fd = htobe32((uint32_t)req->args.r_args.fd);
             memcpy(ptr, &net_fd, sizeof(uint32_t));
             ptr += sizeof(uint32_t);
 
             // Zmienna count (32-bity)
-            uint32_t net_count = htobe32(req->args.w_args.count);
+            uint32_t net_count = htobe32(req->args.r_args.count);
             memcpy(ptr, &net_count, sizeof(uint32_t));
             ptr += sizeof(uint32_t);
 
@@ -140,17 +158,38 @@ int unmarshal_request(const uint8_t *buffer, size_t buffer_len, rpc_request_t *r
             break;
         }
 
+        case RPC_LSEEK: {
+            // Upewniamy się, że w buforze są dane dla fd (4), offset (8) i whence (4)
+            if (buffer_len - (ptr - buffer) < (sizeof(uint32_t) * 2 + sizeof(uint64_t))) return -1;
+
+            uint32_t net_fd, net_whence;
+            uint64_t net_offset;
+            
+            memcpy(&net_fd, ptr, sizeof(uint32_t));
+            req->args.lseek_args.fd = (int)be32toh(net_fd);
+            ptr += sizeof(uint32_t);
+
+            memcpy(&net_offset, ptr, sizeof(uint64_t));
+            req->args.lseek_args.offset = (int64_t)be64toh(net_offset);
+            ptr += sizeof(uint64_t);
+
+            memcpy(&net_whence, ptr, sizeof(uint32_t));
+            req->args.lseek_args.whence = (int)be32toh(net_whence);
+            ptr += sizeof(uint32_t);
+            break;
+        }
+
         case RPC_READ: {
             if (buffer_len - (ptr - buffer) < (sizeof(uint32_t) * 2)) return -1;
 
             uint32_t net_fd, net_count;
             
             memcpy(&net_fd, ptr, sizeof(uint32_t));
-            req->args.w_args.fd = (int)be32toh(net_fd);
+            req->args.r_args.fd = (int)be32toh(net_fd);
             ptr += sizeof(uint32_t);
 
             memcpy(&net_count, ptr, sizeof(uint32_t));
-            req->args.w_args.count = be32toh(net_count);
+            req->args.r_args.count = be32toh(net_count);
             ptr += sizeof(uint32_t);
             
             break;

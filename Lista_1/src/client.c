@@ -115,6 +115,28 @@ ssize_t rpc_write(void *buf, size_t count, File *f) {
     return resp.return_value; // Zwracamy ile bajtów zapisał serwer
 }
 
+off_t rpc_lseek(File *f, off_t offset, int whence) {
+    if (!f) return -1;
+
+    rpc_request_t req = {0};
+    rpc_response_t resp = {0};
+
+    req.opcode = RPC_LSEEK;
+    req.args.lseek_args.fd = f->fd;
+    req.args.lseek_args.offset = offset;
+    req.args.lseek_args.whence = whence;
+
+    if (rpc_call(&req, &resp) < 0) {
+        return -1; // Błąd komunikacji z serwerem
+    }
+
+    if (resp.status < 0) {
+        return resp.status; // Błąd POSIX na serwerze (np. zły plik)
+    }
+
+    return (off_t)resp.return_value; // Zwracamy nową pozycję wskaźnika
+}
+
 size_t rpc_read(void *buf, size_t count, File *f) {
     if (!f) return -1;
     

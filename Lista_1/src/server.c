@@ -14,7 +14,7 @@
 extern int unmarshal_request(const uint8_t *buffer, size_t buffer_len, rpc_request_t *req);
 
 // Pomocnicza funkcja do pakowania odpowiedzi (żeby zachować Big-Endian)
-extern ssize_t marshal_response(const rpc_response_t *resp, uint8_t *buffer, size_t buffer_size);
+extern ssize_t marshal_response(uint8_t opcode, const rpc_response_t *resp, uint8_t *buffer, size_t buffer_size);
 
 #define PORT 8080
 
@@ -64,7 +64,7 @@ int main() {
         // --- OBSŁUGA CACHE I IDEMPOTENTNOŚCI ---
         if (req.seq_number == last_seq_number) {
             printf("[SERWER] Duplikat żądania! Zwracam wynik z pamięci podręcznej.\n");
-            ssize_t resp_len = marshal_response(&last_response, send_buffer, sizeof(send_buffer));
+            ssize_t resp_len = marshal_response(req.opcode, &last_response, send_buffer, sizeof(send_buffer));
             sendto(sockfd, send_buffer, resp_len, 0, (struct sockaddr *)&client_addr, client_len);
             continue;
         } else if (req.seq_number < last_seq_number) {
@@ -92,24 +92,25 @@ int main() {
                 break;
             }
             case RPC_WRITE: {
-                ssize_t written = write(req.args.rw_args.fd, req.args.rw_args.buf, req.args.rw_args.count);
+                ssize_t written = write(req.args.w_args.fd, req.args.w_args.buf, req.args.w_args.count);
                 if (written < 0) {
                     resp.status = -errno;
                 } else {
                     resp.return_value = written;
-                    printf("[SERWER] Zapisano %ld bajtów do fd=%d\n", written, req.args.rw_args.fd);
+                    printf("[SERWER] Zapisano %ld bajtów do fd=%d\n", written, req.args.w_args.fd);
                 }
                 break;
             }
             case RPC_READ: {
-                printf("[SERWER] Próba odczytu %u bajtów z fd=%d\n", req.args.rw_args.count, req.args.rw_args.fd);
-                ssize_t read_bytes = read(req.args.rw_args.fd, req.args.rw_args.buf, req.args.rw_args.count);
+                printf("[SERWER] Próba odczytu %u bajtów z fd=%d\n", req.args.r_args.count, req.args.r_args.fd);
+                ssize_t read_bytes = read(req.args.r_args.fd, resp.data, req.args.r_args.count);
                 if (read_bytes < 0) {
+                    printf("ERROR\n");
                     resp.status = -errno;
                 } else {
                     resp.return_value = read_bytes;
                     // resp.data = req.args.rw_args.buf;
-                    printf("[SERWER] Odczytano %ld bajtów z fd=%d\n", read_bytes, req.args.rw_args.fd);
+                    printf("[SERWER] Odczytano %ld bajtów z fd=%d\n", read_bytes, req.args.r_args.fd);
                 }
             }
             default:
@@ -122,7 +123,7 @@ int main() {
         last_response = resp;
 
         // Odeślij odpowiedź
-        ssize_t resp_len = marshal_response(&resp, send_buffer, sizeof(send_buffer));
+        ssize_t resp_len = marshal_response(req.opcode, &resp, send_buffer, sizeof(send_buffer));
         sendto(sockfd, send_buffer, resp_len, 0, (struct sockaddr *)&client_addr, client_len);
     }
 

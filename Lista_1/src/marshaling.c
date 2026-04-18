@@ -38,18 +38,18 @@ ssize_t marshal_request(const rpc_request_t *req, uint8_t *buffer, size_t buffer
 
         case RPC_WRITE: {
             // Deskryptor fd (32-bity)
-            uint32_t net_fd = htobe32((uint32_t)req->args.rw_args.fd);
+            uint32_t net_fd = htobe32((uint32_t)req->args.w_args.fd);
             memcpy(ptr, &net_fd, sizeof(uint32_t));
             ptr += sizeof(uint32_t);
 
             // Zmienna count (32-bity)
-            uint32_t net_count = htobe32(req->args.rw_args.count);
+            uint32_t net_count = htobe32(req->args.w_args.count);
             memcpy(ptr, &net_count, sizeof(uint32_t));
             ptr += sizeof(uint32_t);
 
             // Bufor danych - kopiujemy tylko tyle bajtów, ile wskazuje count
-            memcpy(ptr, req->args.rw_args.buf, req->args.rw_args.count);
-            ptr += req->args.rw_args.count;
+            memcpy(ptr, req->args.w_args.buf, req->args.w_args.count);
+            ptr += req->args.w_args.count;
             break;
         }
 
@@ -110,19 +110,19 @@ int unmarshal_request(const uint8_t *buffer, size_t buffer_len, rpc_request_t *r
             uint32_t net_fd, net_count;
             
             memcpy(&net_fd, ptr, sizeof(uint32_t));
-            req->args.rw_args.fd = (int)be32toh(net_fd);
+            req->args.w_args.fd = (int)be32toh(net_fd);
             ptr += sizeof(uint32_t);
 
             memcpy(&net_count, ptr, sizeof(uint32_t));
-            req->args.rw_args.count = be32toh(net_count);
+            req->args.w_args.count = be32toh(net_count);
             ptr += sizeof(uint32_t);
 
             // Zabezpieczenie przed przepełnieniem bufora
-            if (req->args.rw_args.count > MAX_CHUNK_SIZE) return -1;
-            if (buffer_len - (ptr - buffer) < req->args.rw_args.count) return -1;
+            if (req->args.w_args.count > MAX_CHUNK_SIZE) return -1;
+            if (buffer_len - (ptr - buffer) < req->args.w_args.count) return -1;
 
-            memcpy(req->args.rw_args.buf, ptr, req->args.rw_args.count);
-            ptr += req->args.rw_args.count;
+            memcpy(req->args.w_args.buf, ptr, req->args.w_args.count);
+            ptr += req->args.w_args.count;
             break;
         }
 
@@ -132,7 +132,7 @@ int unmarshal_request(const uint8_t *buffer, size_t buffer_len, rpc_request_t *r
     return 0;
 }
 
-ssize_t marshal_response(const rpc_response_t *resp, uint8_t *buffer, size_t buffer_size) {
+ssize_t marshal_response(uint8_t opcode, const rpc_response_t *resp, uint8_t *buffer, size_t buffer_size) {
     if (buffer_size < 20) return -1;
     uint8_t *ptr = buffer;
     
@@ -148,11 +148,16 @@ ssize_t marshal_response(const rpc_response_t *resp, uint8_t *buffer, size_t buf
     memcpy(ptr, &net_retval, sizeof(int64_t));
     ptr += sizeof(int64_t);
 
-    // Kopiowanie danych, jeśli to była operacja READ (pominę dla zwięzłości w write/open)
+    if (opcode == RPC_READ && resp->return_value>0){
+        if(buffer_size - (ptr - buffer) < resp->return_value) return -1;
+        memcpy(ptr, resp->data, resp->return_value);
+        ptr += resp->return_value;
+    }
+
     return (ssize_t)(ptr - buffer);
 }
 
-int unmarshal_response(const uint8_t *buffer, size_t buffer_len, rpc_response_t *resp) {
+int unmarshal_response(uint8_t opcode, const uint8_t *buffer, size_t buffer_len, rpc_response_t *resp) {
     if (buffer_len < 20) return -1;
     const uint8_t *ptr = buffer;
 
@@ -164,6 +169,12 @@ int unmarshal_response(const uint8_t *buffer, size_t buffer_len, rpc_response_t 
 
     int64_t net_retval; memcpy(&net_retval, ptr, sizeof(int64_t));
     resp->return_value = (int64_t)be64toh((uint64_t)net_retval);
+
+    if (opcode == RPC_READ && resp->return_value>0){
+        if(buffer_len - (ptr - buffer) < resp->return_value) return -1;
+        memcpy(resp->data, ptr, resp->return_value);
+        ptr += resp->return_value;
+    }
 
     return 0;
 }

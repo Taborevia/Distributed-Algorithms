@@ -11,7 +11,7 @@
 extern ssize_t marshal_request(const rpc_request_t *req, uint8_t *buffer, size_t buffer_size);
 
 // Pomocnicza funkcja do rozpakowania odpowiedzi (analogiczna do marshalingu)
-extern int unmarshal_response(const uint8_t *buffer, size_t buffer_len, rpc_response_t *resp);
+extern int unmarshal_response(uint8_t opcode, const uint8_t *buffer, size_t buffer_len, rpc_response_t *resp);
 
 // Globalny stan klienta
 static int rpc_sockfd = -1;
@@ -56,7 +56,7 @@ int rpc_call(rpc_request_t *req, rpc_response_t *resp) {
         ssize_t n = recvfrom(rpc_sockfd, recv_buf, sizeof(recv_buf), 0, (struct sockaddr *)&server_addr, &srv_len);
 
         if (n > 0) {
-            unmarshal_response(recv_buf, n, resp);
+            unmarshal_response(req->opcode, recv_buf, n, resp);
             if (resp->seq_number == req->seq_number) {
                 return 0; // Sukces
             }
@@ -97,12 +97,12 @@ ssize_t rpc_write(void *buf, size_t count, File *f) {
     rpc_response_t resp = {0};
 
     req.opcode = RPC_WRITE;
-    req.args.rw_args.fd = f->fd;
+    req.args.w_args.fd = f->fd;
     
     // Obsługa Opcji 1: wysyłamy maksymalnie MAX_CHUNK_SIZE
     uint32_t bytes_to_send = count < MAX_CHUNK_SIZE ? count : MAX_CHUNK_SIZE;
-    req.args.rw_args.count = bytes_to_send;
-    memcpy(req.args.rw_args.buf, buf, bytes_to_send);
+    req.args.w_args.count = bytes_to_send;
+    memcpy(req.args.w_args.buf, buf, bytes_to_send);
 
     if (rpc_call(&req, &resp) < 0) {
         return -1; // Awaria komunikacji
@@ -122,19 +122,19 @@ size_t rpc_read(void *buf, size_t count, File *f) {
     rpc_response_t resp = {0};
 
     req.opcode = RPC_READ;
-    req.args.rw_args.fd = f->fd;
+    req.args.r_args.fd = f->fd;
     
     // Obsługa Opcji 1: wysyłamy maksymalnie MAX_CHUNK_SIZE
-    uint32_t bytes_to_send = count < MAX_CHUNK_SIZE ? count : MAX_CHUNK_SIZE;
-    req.args.rw_args.count = bytes_to_send;
-    // memcpy(req.args.rw_args.buf, buf, bytes_to_send);
+    req.args.r_args.count = count;
     printf("test2\n");
 
     if (rpc_call(&req, &resp) < 0) {
         return -1; // Awaria komunikacji
     }
-    printf("test1\n");
-
+    for (int i=0; i<resp.return_value; i++){
+        printf("%c", resp.data[i]);
+    }
+    printf(resp.return_value);
     if (resp.status < 0) {
         return resp.status; // Błąd operacji na pliku
     }

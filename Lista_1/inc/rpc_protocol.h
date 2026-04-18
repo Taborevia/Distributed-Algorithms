@@ -35,12 +35,18 @@ typedef struct {
             char mode[MAX_MODE_LEN]; 
         } open_args;
 
-        // Argumenty dla: read i write
+        // Argumenty dla write
         struct {
             int fd;                       // Zdalny deskryptor pliku
             uint32_t count;               // Ile bajtów chcemy odczytać/zapisać
             uint8_t buf[MAX_CHUNK_SIZE];  // Bufor z danymi (tylko dla operacji WRITE)
-        } rw_args;
+        } w_args;
+
+        // Argumenty dla read
+        struct {
+            int fd;                       // Zdalny deskryptor pliku
+            uint32_t count;               // Ile bajtów chcemy odczytać/zapisać
+        } r_args;
 
         // Argumenty dla: lseek(off_t offset, int whence, File *f)
         struct {

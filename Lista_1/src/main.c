@@ -13,7 +13,7 @@ int main() {
     rpc_init("127.0.0.1", 8080);
 
     printf("Otwieranie pliku 'test_zdalny.txt'...\n");
-    File *plik = rpc_open("test_zdalny.txt", "w");
+    File *plik = rpc_open("test_zdalny.txt", "r");
     if (!plik) {
         printf("Błąd otwierania pliku!\n");
         return 1;

@@ -114,3 +114,30 @@ ssize_t rpc_write(void *buf, size_t count, File *f) {
 
     return resp.return_value; // Zwracamy ile bajtów zapisał serwer
 }
+
+size_t rpc_read(void *buf, size_t count, File *f) {
+    if (!f) return -1;
+    
+    rpc_request_t req = {0};
+    rpc_response_t resp = {0};
+
+    req.opcode = RPC_READ;
+    req.args.rw_args.fd = f->fd;
+    
+    // Obsługa Opcji 1: wysyłamy maksymalnie MAX_CHUNK_SIZE
+    uint32_t bytes_to_send = count < MAX_CHUNK_SIZE ? count : MAX_CHUNK_SIZE;
+    req.args.rw_args.count = bytes_to_send;
+    // memcpy(req.args.rw_args.buf, buf, bytes_to_send);
+    printf("test2\n");
+
+    if (rpc_call(&req, &resp) < 0) {
+        return -1; // Awaria komunikacji
+    }
+    printf("test1\n");
+
+    if (resp.status < 0) {
+        return resp.status; // Błąd operacji na pliku
+    }
+
+    return resp.return_value; // Zwracamy ile bajtów zapisał serwer
+}

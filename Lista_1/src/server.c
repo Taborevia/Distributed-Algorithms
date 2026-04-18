@@ -14,25 +14,7 @@
 extern int unmarshal_request(const uint8_t *buffer, size_t buffer_len, rpc_request_t *req);
 
 // Pomocnicza funkcja do pakowania odpowiedzi (żeby zachować Big-Endian)
-ssize_t marshal_response(const rpc_response_t *resp, uint8_t *buffer, size_t buffer_size) {
-    if (buffer_size < 20) return -1;
-    uint8_t *ptr = buffer;
-    
-    uint64_t net_seq = htobe64(resp->seq_number);
-    memcpy(ptr, &net_seq, sizeof(uint64_t));
-    ptr += sizeof(uint64_t);
-
-    int32_t net_status = htobe32((uint32_t)resp->status);
-    memcpy(ptr, &net_status, sizeof(int32_t));
-    ptr += sizeof(int32_t);
-
-    int64_t net_retval = htobe64((uint64_t)resp->return_value);
-    memcpy(ptr, &net_retval, sizeof(int64_t));
-    ptr += sizeof(int64_t);
-
-    // Kopiowanie danych, jeśli to była operacja READ (pominę dla zwięzłości w write/open)
-    return (ssize_t)(ptr - buffer);
-}
+extern ssize_t marshal_response(const rpc_response_t *resp, uint8_t *buffer, size_t buffer_size);
 
 #define PORT 8080
 
@@ -118,6 +100,17 @@ int main() {
                     printf("[SERWER] Zapisano %ld bajtów do fd=%d\n", written, req.args.rw_args.fd);
                 }
                 break;
+            }
+            case RPC_READ: {
+                printf("[SERWER] Próba odczytu %u bajtów z fd=%d\n", req.args.rw_args.count, req.args.rw_args.fd);
+                ssize_t read_bytes = read(req.args.rw_args.fd, req.args.rw_args.buf, req.args.rw_args.count);
+                if (read_bytes < 0) {
+                    resp.status = -errno;
+                } else {
+                    resp.return_value = read_bytes;
+                    // resp.data = req.args.rw_args.buf;
+                    printf("[SERWER] Odczytano %ld bajtów z fd=%d\n", read_bytes, req.args.rw_args.fd);
+                }
             }
             default:
                 resp.status = -ENOSYS; // Niezaimplementowane

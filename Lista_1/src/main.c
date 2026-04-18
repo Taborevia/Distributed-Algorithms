@@ -29,5 +29,15 @@ int main() {
         printf("Błąd zapisu.\n");
     }
 
+    const char *read_bytes;
+    printf("Odczytywanie danych...\n");
+
+    ssize_t odczytano = rpc_read((void*)read_bytes, strlen(wiadomosc), plik);
+    if (odczytano > 0) {
+        printf("Sukces! Odczytano %ld bajtów: %s\n", odczytano, read_bytes);
+    } else {
+        printf("Błąd odczytu.\n");
+    }
+
     return 0;
 }

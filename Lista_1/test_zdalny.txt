@@ -1,0 +1,1 @@
+To jest test zapisu przez wlasny mechanizm RPC i UDP!

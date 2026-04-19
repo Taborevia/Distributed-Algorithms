@@ -7,19 +7,16 @@
 #include <sys/time.h>
 
 #include "rpc_protocol.h"
+#include "client.h"
 
 extern ssize_t marshal_request(const rpc_request_t *req, uint8_t *buffer, size_t buffer_size);
+extern int unmarshal_response(uint8_t opcode, const uint8_t *buffer, int64_t buffer_size, rpc_response_t *resp);
 
-// Pomocnicza funkcja do rozpakowania odpowiedzi (analogiczna do marshalingu)
-extern int unmarshal_response(uint8_t opcode, const uint8_t *buffer, size_t buffer_len, rpc_response_t *resp);
-
-// Globalny stan klienta
 static int rpc_sockfd = -1;
 static struct sockaddr_in server_addr;
 static uint64_t current_auth_token = 0;
 static uint64_t global_seq_number = 1;
 
-// Inicjalizacja połączenia
 void rpc_init(const char *server_ip, int port) {
     rpc_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     
@@ -27,17 +24,14 @@ void rpc_init(const char *server_ip, int port) {
     server_addr.sin_port = htons(port);
     inet_pton(AF_INET, server_ip, &server_addr.sin_addr);
 
-    // Ustawienie timeoutu dla recvfrom na 1 sekundę
     struct timeval tv;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
     setsockopt(rpc_sockfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    // Generowanie tokena uwierzytelniającego (zgodnie z poleceniem)
-    getrandom(&current_auth_token, sizeof(current_auth_token), 0);
+    getrandom(&current_auth_token, sicurrent_auth_tokenzeof(current_auth_token), 0);
 }
 
-// Główna funkcja wysyłająca z logiką RETRY
 int rpc_call(rpc_request_t *req, rpc_response_t *resp) {
     uint8_t send_buf[8192];
     uint8_t recv_buf[8192];
@@ -58,19 +52,15 @@ int rpc_call(rpc_request_t *req, rpc_response_t *resp) {
         if (n > 0) {
             unmarshal_response(req->opcode, recv_buf, n, resp);
             if (resp->seq_number == req->seq_number) {
-                return 0; // Sukces
+                return 0;
             }
-            // Zły numer sekwencyjny? Czekamy dalej (w pętli, stary pakiet)
         } else {
-            // Timeout - zmniejszamy licznik i powtarzamy
             printf("[KLIENT] Timeout! Ponawiam żądanie (pozostało prób: %d)\n", max_retries - 1);
             max_retries--;
         }
     }
-    return -1; // Błąd po wszystkich próbach (Fail)
+    return -1;
 }
-
-/* --- API DLA UŻYTKOWNIKA --- */
 
 File *rpc_open(const char *pathname, char *mode) {
     rpc_request_t req = {0};
@@ -99,20 +89,19 @@ ssize_t rpc_write(void *buf, size_t count, File *f) {
     req.opcode = RPC_WRITE;
     req.args.w_args.fd = f->fd;
     
-    // Obsługa Opcji 1: wysyłamy maksymalnie MAX_CHUNK_SIZE
     uint32_t bytes_to_send = count < MAX_CHUNK_SIZE ? count : MAX_CHUNK_SIZE;
     req.args.w_args.count = bytes_to_send;
     memcpy(req.args.w_args.buf, buf, bytes_to_send);
 
     if (rpc_call(&req, &resp) < 0) {
-        return -1; // Awaria komunikacji
+        return -1;
     }
 
     if (resp.status < 0) {
-        return resp.status; // Błąd operacji na pliku
+        return resp.status;
     }
 
-    return resp.return_value; // Zwracamy ile bajtów zapisał serwer
+    return resp.return_value;
 }
 
 off_t rpc_lseek(File *f, off_t offset, int whence) {
@@ -127,14 +116,14 @@ off_t rpc_lseek(File *f, off_t offset, int whence) {
     req.args.lseek_args.whence = whence;
 
     if (rpc_call(&req, &resp) < 0) {
-        return -1; // Błąd komunikacji z serwerem
+        return -1;
     }
-
+    
     if (resp.status < 0) {
-        return resp.status; // Błąd POSIX na serwerze (np. zły plik)
+        return resp.status;
     }
 
-    return (off_t)resp.return_value; // Zwracamy nową pozycję wskaźnika
+    return (off_t)resp.return_value;
 }
 
 size_t rpc_read(void *buf, size_t count, File *f) {
@@ -146,20 +135,70 @@ size_t rpc_read(void *buf, size_t count, File *f) {
     req.opcode = RPC_READ;
     req.args.r_args.fd = f->fd;
     
-    // Obsługa Opcji 1: wysyłamy maksymalnie MAX_CHUNK_SIZE
     req.args.r_args.count = count;
-    printf("test2\n");
 
     if (rpc_call(&req, &resp) < 0) {
-        return -1; // Awaria komunikacji
+        return -1;
     }
-    for (int i=0; i<resp.return_value; i++){
-        printf("%c", resp.data[i]);
-    }
-    printf(resp.return_value);
+    
     if (resp.status < 0) {
-        return resp.status; // Błąd operacji na pliku
+        return resp.status;
     }
 
-    return resp.return_value; // Zwracamy ile bajtów zapisał serwer
+    memcpy(buf, resp.data, resp.return_value);
+
+    return resp.return_value;
+}
+
+int rpc_close(File *f) {
+    if (!f) return -1;
+
+    rpc_request_t req = {0};
+    rpc_response_t resp = {0};
+
+    req.opcode = RPC_CLOSE;
+    req.args.close_args.fd = f->fd;
+
+    if (rpc_call(&req, &resp) < 0) {
+        return -1;
+    }
+
+    free(f);
+
+    return resp.status;
+}
+
+int rpc_chmod(const char *pathname, mode_t mode) {
+    rpc_request_t req = {0};
+    rpc_response_t resp = {0};
+
+    req.opcode = RPC_CHMOD;
+    strncpy(req.args.chmod_args.pathname, pathname, MAX_PATH_LEN);
+    req.args.chmod_args.mode = (uint32_t)mode;
+
+    if (rpc_call(&req, &resp) < 0) return -1;
+    return resp.status; 
+}
+
+int rpc_unlink(const char *pathname) {
+    rpc_request_t req = {0};
+    rpc_response_t resp = {0};
+
+    req.opcode = RPC_UNLINK;
+    strncpy(req.args.unlink_args.pathname, pathname, MAX_PATH_LEN);
+
+    if (rpc_call(&req, &resp) < 0) return -1;
+    return resp.status;
+}
+
+int rpc_rename(const char *oldpath, const char *newpath) {
+    rpc_request_t req = {0};
+    rpc_response_t resp = {0};
+
+    req.opcode = RPC_RENAME;
+    strncpy(req.args.rename_args.oldpath, oldpath, MAX_PATH_LEN);
+    strncpy(req.args.rename_args.newpath, newpath, MAX_PATH_LEN);
+
+    if (rpc_call(&req, &resp) < 0) return -1;
+    return resp.status;
 }

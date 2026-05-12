@@ -1,0 +1,2 @@
+cat ratings.csv | python3 mapper.py | sort -n | python3 reducer.py | sort -n | python3 mapper_3_1.py | sort -n
+head ratings.csv -n 10000 | python3 mapper.py | sort -n | python3 reducer.py | sort -n | python3 mapper_2.py | sort -n | python3 reducer_2.py | sort -n | python3 mapper_3_2.py | sort -n

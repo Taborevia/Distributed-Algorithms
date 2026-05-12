@@ -1,0 +1,5 @@
+hdfs dfs -rm -r /user/output_zad3
+
+mapred streaming -input /user/input/matrix/matrix_A.txt -input /user/input/matrix/matrix_2.txt -mapper "python3 mapper_phase_1.py" -reducer "python3 reducer_phase_1.py" -file mapper_phase_1.py -file reducer_phase_1.py -output /user/output_zad3
+
+mapred streaming -input /user/output_zad3/part-* -mapper /bin/cat -reducer python3 reducer_phase_2.py -file reducer_phase_2.py -output /user/output_zad3_final

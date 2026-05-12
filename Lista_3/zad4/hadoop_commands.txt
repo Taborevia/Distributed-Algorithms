@@ -1,0 +1,3 @@
+hdfs dfs -rm -r /user/output_zad4
+
+mapred streaming -input /user/input/data.csv -mapper "python3 mapper.py 1766" -combiner "python3 combiner.py" -reducer "python3 reducer.py" -output /user/output_zad4
